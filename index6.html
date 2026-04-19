@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oddball + N-Back Experiment</title>
+
+  <!-- jsPsych core -->
+  <script src="https://unpkg.com/jspsych@8.0.2"></script>
+
+  <!-- jsPsych plugins -->
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.0.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-text@2.0.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-preload@2.0.0"></script>
+  <script src="https://unpkg.com/@jspsych-contrib/plugin-pipe@0.5"></script>
+
+  <link href="https://unpkg.com/jspsych@8.0.2/css/jspsych.css" rel="stylesheet" type="text/css">
+
+  <style>
+    /* Full-black background so stimuli pop, with white default text */
+    body { background-color: #000000; }
+    .jspsych-display-element { color: #ffffff; font-family: 'Arial', sans-serif; }
+    .jspsych-content { max-width: 900px; }
+
+    /* Fixation cross */
+    .fixation { font-size: 60px; color: #ffffff; }
+
+    /* Oddball square */
+    .oddball-square {
+      width: 150px;
+      height: 150px;
+      margin: 0 auto;
+    }
+
+    /* N-back letter */
+    .nback-letter {
+      font-size: 100px;
+      font-weight: bold;
+      color: #ffffff;
+    }
+
+    /* N-back feedback flash at bottom of screen */
+    .nback-feedback {
+      position: fixed;
+      bottom: 15%;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 36px;
+      font-weight: bold;
+      z-index: 999;
+    }
+    .nback-feedback.correct { color: #22c55e; }   /* green */
+    .nback-feedback.incorrect { color: #ef4444; } /* red */
+
+    /* Instructions text styling */
+    .instructions {
+      font-size: 22px;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .instructions h2 { text-align: center; font-size: 32px; }
+    .instructions .key {
+      display: inline-block;
+      background: #333;
+      border: 1px solid #fff;
+      padding: 2px 10px;
+      margin: 0 3px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body></body>
+
+<script>
+/* =========================================================================
+   OddBall + N-Back Experiment
+   Single-file jsPsych implementation for GitHub Pages → DataPipe → OSF
+   ========================================================================= */
+
+/* -------------------- CONFIG -------------------- */
+const DATAPIPE_EXPERIMENT_ID = "5vSkzEFf4m9u";
+
+// Trial-timing constants (seconds converted to ms where needed)
+const ODDBALL = {
+  fixationDuration: 1000,       // 1.0 s fixation
+  stimulusDuration: 500,        // 500 ms square
+  responseWindow: 1000,         // response window after stim onset (until 2.0 s)
+  itiDuration: 500              // blank ISI after stim offset (until 2.5 s total)
+};
+
+const NBACK = {
+  fixationDuration: 500,        // 0.5 s fixation (before the letter appears)
+  letterDuration: 500,          // 500 ms letter visible
+  // `totalTrialDuration` is the duration of the letter+response jsPsych trial
+  // (fixation is a SEPARATE preceding trial). Letter is visible for 500 ms, then
+  // blank while SPACE is still accepted. Trial ends at totalTrialDuration.
+  totalTrialDuration: 1700,     // letter (500) + blank+response (1200) = 1700
+  responseWindowEnd: 1700,      // accept SPACE for full trial duration from letter onset
+  feedbackDuration: 300         // 300 ms flash after SPACE press
+  // Per-trial total = fixation (500) + totalTrialDuration (1700) = 2200 ms
+};
+
+/* -------------------- CONDITIONS (embedded) --------------------
+   Baked directly into the file so the experiment works as a single HTML
+   file with no external dependencies. */
+
+const ODDBALL_CONDITIONS = [
+  { trial_num: 1,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 2,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 3,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 4,  square_color: "red",  trial_type: "oddball",  corrAns: "j" },
+  { trial_num: 5,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 6,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 7,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 8,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 9,  square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 10, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 11, square_color: "red",  trial_type: "oddball",  corrAns: "j" },
+  { trial_num: 12, square_color: "red",  trial_type: "oddball",  corrAns: "j" },
+  { trial_num: 13, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 14, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 15, square_color: "red",  trial_type: "oddball",  corrAns: "j" },
+  { trial_num: 16, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 17, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 18, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 19, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 20, square_color: "red",  trial_type: "oddball",  corrAns: "j" },
+  { trial_num: 21, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 22, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 23, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 24, square_color: "blue", trial_type: "standard", corrAns: "f" },
+  { trial_num: 25, square_color: "blue", trial_type: "standard", corrAns: "f" }
+];
+
+const NBACK_2_PRACTICE = [
+  { trial_num: 1,  letter: "L", is_match: 0 },
+  { trial_num: 2,  letter: "N", is_match: 0 },
+  { trial_num: 3,  letter: "F", is_match: 0 },
+  { trial_num: 4,  letter: "N", is_match: 1 },
+  { trial_num: 5,  letter: "N", is_match: 0 },
+  { trial_num: 6,  letter: "N", is_match: 1 },
+  { trial_num: 7,  letter: "V", is_match: 0 },
+  { trial_num: 8,  letter: "X", is_match: 0 },
+  { trial_num: 9,  letter: "V", is_match: 1 },
+  { trial_num: 10, letter: "Z", is_match: 0 }
+];
+
+const NBACK_2_MAIN = [
+  { trial_num: 1,  letter: "T", is_match: 0 },
+  { trial_num: 2,  letter: "F", is_match: 0 },
+  { trial_num: 3,  letter: "D", is_match: 0 },
+  { trial_num: 4,  letter: "F", is_match: 1 },
+  { trial_num: 5,  letter: "V", is_match: 0 },
+  { trial_num: 6,  letter: "M", is_match: 0 },
+  { trial_num: 7,  letter: "F", is_match: 0 },
+  { trial_num: 8,  letter: "M", is_match: 1 },
+  { trial_num: 9,  letter: "J", is_match: 0 },
+  { trial_num: 10, letter: "M", is_match: 1 }
+];
+
+const NBACK_3_MAIN = [
+  { trial_num: 1,  letter: "X", is_match: 0 },
+  { trial_num: 2,  letter: "M", is_match: 0 },
+  { trial_num: 3,  letter: "Z", is_match: 0 },
+  { trial_num: 4,  letter: "H", is_match: 0 },
+  { trial_num: 5,  letter: "T", is_match: 0 },
+  { trial_num: 6,  letter: "K", is_match: 0 },
+  { trial_num: 7,  letter: "H", is_match: 1 },
+  { trial_num: 8,  letter: "T", is_match: 1 },
+  { trial_num: 9,  letter: "V", is_match: 0 },
+  { trial_num: 10, letter: "H", is_match: 1 }
+];
+
+const NBACK_4_MAIN = [
+  { trial_num: 1,  letter: "Q", is_match: 0 },
+  { trial_num: 2,  letter: "Q", is_match: 0 },
+  { trial_num: 3,  letter: "J", is_match: 0 },
+  { trial_num: 4,  letter: "Y", is_match: 0 },
+  { trial_num: 5,  letter: "G", is_match: 0 },
+  { trial_num: 6,  letter: "Q", is_match: 1 },
+  { trial_num: 7,  letter: "D", is_match: 0 },
+  { trial_num: 8,  letter: "L", is_match: 0 },
+  { trial_num: 9,  letter: "G", is_match: 1 },
+  { trial_num: 10, letter: "Q", is_match: 1 }
+];
+
+/* -------------------- jsPsych INITIALIZATION -------------------- */
+
+const jsPsych = initJsPsych({
+  on_finish: function() {
+    // After DataPipe trial has run, show thank-you content
+    document.body.innerHTML =
+      '<div style="margin: 15% auto; max-width: 700px; color: #fff; font-family: Arial; text-align: center; font-size: 22px;">' +
+      '<h1>Thank you!</h1>' +
+      '<p>Your responses have been saved. You may now close this tab.</p>' +
+      '</div>';
+  }
+});
+
+const timeline = [];
+
+/* -------------------- PARTICIPANT ID -------------------- */
+
+const participant_id_trial = {
+  type: jsPsychSurveyText,
+  questions: [
+    {
+      prompt: "Please enter your Participant ID:",
+      name: "participant_id",
+      required: true
+    }
+  ],
+  data: { screen: "participant_id" },
+  on_finish: function(data) {
+    const pid = data.response.participant_id.trim();
+    jsPsych.data.addProperties({ participant_id: pid });
+  }
+};
+timeline.push(participant_id_trial);
+
+/* -------------------- WELCOME / OVERVIEW -------------------- */
+
+const welcome = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `
+    <div class="instructions">
+      <h2>Welcome</h2>
+      <p>In this session you will complete two short tasks:</p>
+      <ol>
+        <li>A coloured-square task (the <b>Oddball task</b>)</li>
+        <li>A letter-matching task (the <b>N-Back task</b>)</li>
+      </ol>
+      <p>Each task will begin with instructions. Please read them carefully.</p>
+      <p style="text-align:center; margin-top:40px;">Press <span class="key">SPACE</span> to begin.</p>
+    </div>
+  `,
+  choices: [" "],
+  data: { screen: "welcome" }
+};
+timeline.push(welcome);
+
+/* ==========================================================
+   TASK 1 — ODDBALL
+   ========================================================== */
+
+const oddball_instructions = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `
+    <div class="instructions">
+      <h2>Task 1: Oddball Task</h2>
+      <p>You will see a sequence of coloured squares appearing one at a time in the centre of the screen.</p>
+      <p>There are two types of squares:</p>
+      <ul>
+        <li><b style="color:#4a90e2;">BLUE</b> squares appear most of the time.</li>
+        <li><b style="color:#e24a4a;">RED</b> squares appear some of the time.</li>
+      </ul>
+      <p>Your task:</p>
+      <ul>
+        <li>Press <span class="key">F</span> when you see a <b style="color:#4a90e2;">BLUE</b> square.</li>
+        <li>Press <span class="key">J</span> when you see a <b style="color:#e24a4a;">RED</b> square.</li>
+      </ul>
+      <p>Try to respond as quickly and accurately as possible.</p>
+      <p style="text-align:center; margin-top:40px;">Press <span class="key">SPACE</span> to begin.</p>
+    </div>
+  `,
+  choices: [" "],
+  data: { screen: "oddball_instructions" }
+};
+timeline.push(oddball_instructions);
+
+/* --- Oddball trial structure --- */
+
+// 1. Fixation
+const oddball_fixation = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: '<div class="fixation">+</div>',
+  choices: "NO_KEYS",
+  trial_duration: ODDBALL.fixationDuration,
+  data: { screen: "oddball_fixation" }
+};
+
+// 2. Stimulus + response (up to responseWindow ms)
+// A key press ENDS the trial immediately (per spec: "Oddball: no feedback, trial ends on response")
+const oddball_stimulus = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    const color = jsPsych.evaluateTimelineVariable("square_color");
+    const css_color = color === "blue" ? "#4a90e2" : "#e24a4a";
+    return `<div class="oddball-square" style="background-color:${css_color};"></div>`;
+  },
+  choices: ["f", "j"],
+  trial_duration: ODDBALL.stimulusDuration + ODDBALL.responseWindow, // 1500 ms max
+  stimulus_duration: ODDBALL.stimulusDuration,                        // square disappears at 500 ms
+  response_ends_trial: true,
+  data: function() {
+    return {
+      screen: "oddball_trial",
+      task: "oddball",
+      trial_num: jsPsych.evaluateTimelineVariable("trial_num"),
+      square_color: jsPsych.evaluateTimelineVariable("square_color"),
+      trial_type_cond: jsPsych.evaluateTimelineVariable("trial_type"),
+      correct_response: jsPsych.evaluateTimelineVariable("corrAns")
+    };
+  },
+  on_finish: function(data) {
+    // Score: correct if response matches corrAns; missed responses are incorrect
+    if (data.response === null) {
+      data.correct = false;
+      data.responded = false;
+    } else {
+      data.correct = (data.response === data.correct_response);
+      data.responded = true;
+    }
+  }
+};
+
+// 3. ISI — fills the remainder of the 2.5 s trial so timing stays uniform across trials.
+//    Total target (fixation + stim-phase + ISI) = 2500 ms.
+//    Fixation was 1000 ms, so stim-phase + ISI should sum to 1500 ms + a post-response buffer.
+//    Spec: when a response ends the stim phase early, we still want at least `itiDuration` (500 ms)
+//    of blank screen afterwards so responses aren't immediately followed by the next fixation.
+const oddball_iti = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: "",
+  choices: "NO_KEYS",
+  trial_duration: function() {
+    // Grab the RT from the preceding oddball_stimulus trial
+    const last = jsPsych.data.get().last(1).values()[0];
+    const rt = (last && last.rt !== undefined) ? last.rt : null;
+    // If no response, stim-phase ran its full 1500 ms → ISI = itiDuration (500 ms)
+    // If response, give a fixed itiDuration (500 ms) post-response blank period
+    // (This keeps total per-trial timing close to 2.5 s for full-window trials, and
+    // shorter for fast responders — matching the original PsychoJS Oddball behavior
+    // where a response ends the routine and the next trial begins after a short gap.)
+    return ODDBALL.itiDuration;
+  },
+  data: { screen: "oddball_iti" }
+};
+
+const oddball_procedure = {
+  timeline: [oddball_fixation, oddball_stimulus, oddball_iti],
+  timeline_variables: ODDBALL_CONDITIONS,
+  randomize_order: true,
+  repetitions: 1
+};
+timeline.push(oddball_procedure);
+
+/* ==========================================================
+   TASK 2 — N-BACK
+   ========================================================== */
+
+// Helper: builds a single N-back block's trial procedure.
+// block_label is used in data tagging; n_level is the N of the N-back.
+function buildNBackBlock(conditions, block_label, n_level) {
+  // Fixation (0.5 s)
+  const fixation = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div class="fixation">+</div>',
+    choices: "NO_KEYS",
+    trial_duration: NBACK.fixationDuration,
+    data: { screen: "nback_fixation", nback_block: block_label, n_level: n_level }
+  };
+
+  // Letter + response window + feedback flash, all in one custom trial.
+  // This single-trial approach guarantees the total duration is fixed
+  // regardless of when (or whether) the participant presses SPACE.
+  const letter_and_response = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+      // Only the letter is inside the stimulus HTML — jsPsych clears this at
+      // stimulus_duration (500 ms). The feedback container is injected separately
+      // into document.body in on_load, so it persists for the full trial.
+      const letter = jsPsych.evaluateTimelineVariable("letter");
+      return `<div class="nback-letter">${letter}</div>`;
+    },
+    choices: [" "],                           // SPACE is the only response
+    trial_duration: NBACK.totalTrialDuration, // trial always runs full duration
+    stimulus_duration: NBACK.letterDuration,  // letter disappears after 500 ms
+    response_ends_trial: false,               // trial runs full duration regardless
+    data: function() {
+      return {
+        screen: "nback_trial",
+        task: "nback",
+        nback_block: block_label,
+        n_level: n_level,
+        trial_num: jsPsych.evaluateTimelineVariable("trial_num"),
+        letter: jsPsych.evaluateTimelineVariable("letter"),
+        is_match: jsPsych.evaluateTimelineVariable("is_match")
+      };
+    },
+    on_load: function() {
+      // Inject feedback container into document.body so it survives the stimulus
+      // being cleared at stimulus_duration (500 ms). Without this, pressing SPACE
+      // during the blank phase would record the response but show no feedback flash.
+      let fb_container = document.getElementById("nback-feedback-container");
+      if (!fb_container) {
+        fb_container = document.createElement("div");
+        fb_container.id = "nback-feedback-container";
+        document.body.appendChild(fb_container);
+      }
+      fb_container.innerHTML = ""; // clear any stale content from previous trial
+
+      // Attach a SPACE listener that shows a 300 ms feedback flash at press time.
+      // Runs IN PARALLEL to the main trial's own keyboard response (which records rt/response).
+      const trial_start = performance.now();
+      let responded = false;
+      let feedback_listener = null;
+
+      const handleKey = function(info) {
+        if (responded) return;                // only first SPACE triggers feedback
+        if (info.key !== " ") return;
+        responded = true;
+
+        // Check response was within response window
+        const rt = performance.now() - trial_start;
+        if (rt > NBACK.responseWindowEnd) return; // too late → no feedback
+
+        // Determine correctness: SPACE is correct only when is_match == 1
+        const is_match = jsPsych.evaluateTimelineVariable("is_match");
+        const correct = (is_match == 1);
+
+        // Show feedback flash in the body-level container
+        const container = document.getElementById("nback-feedback-container");
+        if (container) {
+          const cls = correct ? "correct" : "incorrect";
+          const txt = correct ? "correct" : "incorrect";
+          container.innerHTML = `<div class="nback-feedback ${cls}">${txt}</div>`;
+          // Clear after feedbackDuration
+          setTimeout(function() {
+            const el = document.getElementById("nback-feedback-container");
+            if (el) el.innerHTML = "";
+          }, NBACK.feedbackDuration);
+        }
+      };
+
+      // Register a parallel SPACE listener just for the feedback flash.
+      // The main trial's own listener (from choices:[" "]) handles rt/response recording.
+      feedback_listener = jsPsych.pluginAPI.getKeyboardResponse({
+        callback_function: handleKey,
+        valid_responses: [" "],
+        rt_method: "performance",
+        persist: true,
+        allow_held_key: false
+      });
+
+      // Stash listener reference so on_finish can cancel it
+      window.__nback_feedback_listener = feedback_listener;
+    },
+    on_finish: function(data) {
+      // Cancel the feedback listener so it doesn't bleed into the next trial
+      if (window.__nback_feedback_listener) {
+        jsPsych.pluginAPI.cancelKeyboardResponse(window.__nback_feedback_listener);
+        window.__nback_feedback_listener = null;
+      }
+
+      // jsPsych records `response` (first keypress) and `rt`.
+      // Score trial:
+      //   - is_match == 1: pressing SPACE = hit (correct); not pressing = miss (incorrect)
+      //   - is_match == 0: pressing SPACE = false alarm (incorrect); not pressing = correct rejection (correct)
+      const pressed_space = (data.response === " ");
+      const is_match = (data.is_match == 1);
+
+      if (pressed_space) {
+        data.responded = true;
+        data.correct = is_match;            // SPACE correct only on match trials
+        data.response_type = is_match ? "hit" : "false_alarm";
+      } else {
+        data.responded = false;
+        data.correct = !is_match;           // no response correct only on non-match trials
+        data.response_type = is_match ? "miss" : "correct_rejection";
+      }
+    }
+  };
+
+  return {
+    timeline: [fixation, letter_and_response],
+    timeline_variables: conditions,
+    randomize_order: false, // main blocks are sequential; practice is overridden below
+    repetitions: 1
+  };
+}
+
+/* --- N-back instructions & blocks --- */
+
+const nback_instructions = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `
+    <div class="instructions">
+      <p>Thank you for completing the Oddball task.</p>
+      <p>This is followed by a short N-Back task, which is the final task.</p>
+      <p>A sequence of letters will appear one at a time. Press <span class="key">SPACE</span> if the current letter matches the letter <b>2 letters ago</b>. Otherwise, do nothing.</p>
+      <p>You will now do a short practice.</p>
+      <p style="text-align:center; margin-top:40px;">Press <span class="key">SPACE</span> to begin.</p>
+    </div>
+  `,
+  choices: [" "],
+  data: { screen: "nback_instructions_overview" }
+};
+timeline.push(nback_instructions);
+
+// Transition screen shown between N-back blocks.
+// Tells the participant the new N-level for the upcoming block.
+function nBackTransitionScreen(next_n_level) {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <div class="instructions">
+        <p>In the next block, press <span class="key">SPACE</span> if the current letter matches the letter <b>${next_n_level} letter${next_n_level > 1 ? "s" : ""} ago</b>. Otherwise, do nothing.</p>
+        <p style="text-align:center; margin-top:40px;">Press <span class="key">SPACE</span> when you are ready to continue.</p>
+      </div>
+    `,
+    choices: [" "],
+    data: { screen: "nback_transition", next_n_level: next_n_level }
+  };
+}
+
+// Practice block (2-back). SEQUENTIAL — the CSV order encodes the 2-back structure,
+// so the is_match labels are only valid when the letters are presented in original order.
+const practice_block = buildNBackBlock(NBACK_2_PRACTICE, "practice_2back", 2);
+timeline.push(practice_block);
+
+// Transition into main 2-back
+timeline.push(nBackTransitionScreen(2));
+timeline.push(buildNBackBlock(NBACK_2_MAIN, "main_2back", 2));
+
+// Transition into main 3-back
+timeline.push(nBackTransitionScreen(3));
+timeline.push(buildNBackBlock(NBACK_3_MAIN, "main_3back", 3));
+
+// Transition into main 4-back
+timeline.push(nBackTransitionScreen(4));
+timeline.push(buildNBackBlock(NBACK_4_MAIN, "main_4back", 4));
+
+/* -------------------- SAVING DATA TO DATAPIPE -------------------- */
+
+const saving_notice = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `
+    <div class="instructions" style="text-align:center;">
+      <h2>Saving your data...</h2>
+      <p>Please wait. Do not close this tab.</p>
+    </div>
+  `,
+  choices: "NO_KEYS",
+  trial_duration: 500,
+  data: { screen: "saving_notice" }
+};
+timeline.push(saving_notice);
+
+// Build filename: <participant_id>_<YYYYMMDD-HHMMSS>.csv
+function buildFilename() {
+  const pid = (jsPsych.data.get().values()[0] && jsPsych.data.get().values()[0].participant_id)
+    ? jsPsych.data.get().values()[0].participant_id.replace(/[^a-zA-Z0-9_-]/g, "_")
+    : "anon_" + Math.random().toString(36).substring(2, 10);
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `${pid}_${ts}.csv`;
+}
+
+const save_to_datapipe = {
+  type: jsPsychPipe,
+  action: "save",
+  experiment_id: DATAPIPE_EXPERIMENT_ID,
+  filename: buildFilename,
+  data_string: () => jsPsych.data.get()
+    .filter([{ screen: "oddball_trial" }, { screen: "nback_trial" }])
+    .ignore(["plugin_version"])
+    .csv()
+};
+timeline.push(save_to_datapipe);
+
+/* -------------------- RUN -------------------- */
+
+jsPsych.run(timeline);
+
+</script>
+</html>
